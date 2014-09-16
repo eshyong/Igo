@@ -20,8 +20,8 @@ const (
 const (
 	// Unicode characters for "Large Black Circle" and "Large Circle"
 	CROSS       = "+"
-	BLACK_STONE = "\u2b24"
-	WHITE_STONE = "\u25ef"
+	WHITE_STONE = "\u2b24"
+	BLACK_STONE = "\u25ef"
 
 	// Standard sizes for a Go board.
 	SMALL  = 9
@@ -52,6 +52,15 @@ func NewBoard(n int) *Board {
 		}
 	}
 	return &Board{grid: b, size: n, blackTurn: true, playing: true}
+}
+
+func NewBoardFromArray(array [][]Color, turn bool) *Board {
+	if (len(array) != SMALL && len(array) != MEDIUM && len(array) != LARGE) ||
+		(len(array) != len(array[0])) {
+		fmt.Println("Invalid grid size.")
+		return nil
+	}
+	return &Board{grid: array, size: len(array), blackTurn: turn, playing: true}
 }
 
 /* type Player struct {
@@ -107,11 +116,11 @@ func (board *Board) placeStone(row int, col int, color Color) {
 		fmt.Println("A stone has already been placed here.")
 		return
 	}
-	if board.isIllegal(row, col) {
+	if board.isIllegal(row, col, color) {
 		fmt.Println("That move is suicidal.")
 		return
 	}
-	board.checkStones(row, col, color)
+	// board.checkStones(row, col, color)
 	board.blackTurn = !(board.blackTurn)
 	board.grid[row][col] = color
 }
@@ -120,11 +129,47 @@ func (board *Board) checkStones(row int, col int) {
 	// Check if other stones are in danger.
 }
 
-func (board *Board) isIllegal(row, col, color) {
+func (board *Board) isIllegal(row int, col int, color Color) bool {
+	// Huge if statements
 	surround := true
-	if row == 0 {
-		// Check bottom
+	that := NONE
+	if row > 0 {
+		that = board.grid[row-1][col]
+		if that == NONE {
+			return false
+		}
+		if that == color {
+			surround = board.isIllegal(row-1, col, color)
+		}
 	}
+	if col > 0 {
+		that = board.grid[row][col-1]
+		if that == NONE {
+			return false
+		}
+		if that == color {
+			surround = board.isIllegal(row, col-1, color)
+		}
+	}
+	if row < board.size {
+		that = board.grid[row+1][col]
+		if that == NONE {
+			return false
+		}
+		if that == color {
+			surround = board.isIllegal(row+1, col, color)
+		}
+	}
+	if col < board.size {
+		that = board.grid[row][col+1]
+		if that == NONE {
+			return false
+		}
+		if that == color {
+			surround = board.isIllegal(row, col+1, color)
+		}
+	}
+	return surround
 }
 
 func (board *Board) printAndPrompt() {
