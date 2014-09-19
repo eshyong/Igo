@@ -134,12 +134,35 @@ func (game *Game) placeStone(row int, col int, color Color) {
 		fmt.Println("A stone has already been placed here.")
 		return
 	}
+	// TODO: Figure out how to determine if a move is used to take a group instead of suicidal.
+	var other Color
+	if color == BLACK {
+		other = WHITE
+	} else {
+		other = BLACK
+	}
+	game.board[row][col] = color
+	// This move plays into a surrounded square.
 	if game.IsDead(row, col, color, START) {
-		fmt.Println("That move is suicidal.")
-		return
+		// If this move fully surrounds an enemy group, then it is legal.
+		var alive bool
+		if row > 0 {
+			alive = game.IsDead(row-1, col, other, START)
+		} else if row < game.size-1 {
+			alive = game.IsDead(row+1, col, other, START)
+		} else if col > 0 {
+			alive = game.IsDead(row, col-1, other, START)
+		} else if col < game.size-1 {
+			alive = game.IsDead(row, col+1, other, START)
+		}
+		if !alive {
+			// Remove temporarily placed stone
+			game.board[row][col] = NONE
+			fmt.Println("That move is suicidal.")
+			return
+		}
 	}
 	// Update game.
-	game.board[row][col] = color
 	game.CheckSurroundingStones(row, col, color)
 
 	game.blackTurn = !(game.blackTurn)
@@ -184,18 +207,25 @@ func (game *Game) removeRecursively(row int, col int, color Color) {
 func (game *Game) IsDead(row int, col int, color Color, from Direction) bool {
 	// Stack iteration instead of recursion
 	// Create a map to keep track of added rows
+	if row < 0 || row >= game.size || col < 0 || col >= game.size {
+		fmt.Println("(*Game).IsDead(row, col, color, from) called on an invalid point.")
+		return false
+	}
 	stack := make([]*Point, 0, game.size*game.size)
 	visited := make(map[string]bool)
 
+	// Seed the stack with our current point.
 	curr := newPoint(row, col)
 	hash := stringHash(row, col)
 	visited[hash] = true
 	stack = append(stack, curr)
 	for len(stack) > 0 {
-		// Pop point off stack
+		// Pop point off stack.
 		curr = stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		currRow, currCol := curr.row, curr.col
+
+		// Mark point as visited.
 		hash = stringHash(currRow, currCol)
 		visited[hash] = true
 
@@ -204,30 +234,19 @@ func (game *Game) IsDead(row int, col int, color Color, from Direction) bool {
 			return false
 		} else if game.board[currRow][currCol] == color {
 			// Check left, right, top, and bottom.
-			// We don't want to add points that we already traversed.
-			if currRow > 0 {
-				hash = stringHash(currRow-1, currCol)
-				if !visited[hash] {
-					stack = append(stack, newPoint(currRow-1, currCol))
-				}
+			// We use hash to check if we already traversed that point.
+			// TODO: use non string hash? possibly expensive if we have a large board
+			if hash = stringHash(currRow-1, currCol); currRow > 0 && !visited[hash] {
+				stack = append(stack, newPoint(currRow-1, currCol))
 			}
-			if currRow < game.size-1 {
-				hash = stringHash(currRow+1, currCol)
-				if !visited[hash] {
-					stack = append(stack, newPoint(currRow+1, currCol))
-				}
+			if hash = stringHash(currRow+1, currCol); currRow < game.size-1 && !visited[hash] {
+				stack = append(stack, newPoint(currRow+1, currCol))
 			}
-			if currCol > 0 {
-				hash = stringHash(currRow, currCol-1)
-				if !visited[hash] {
-					stack = append(stack, newPoint(currRow, currCol-1))
-				}
+			if hash = stringHash(currRow, currCol-1); currCol > 0 && !visited[hash] {
+				stack = append(stack, newPoint(currRow, currCol-1))
 			}
-			if currCol < game.size-1 {
-				hash = stringHash(currRow, currCol+1)
-				if !visited[hash] {
-					stack = append(stack, newPoint(currRow, currCol+1))
-				}
+			if hash = stringHash(currRow, currCol+1); currCol < game.size-1 && !visited[hash] {
+				stack = append(stack, newPoint(currRow, currCol+1))
 			}
 		}
 		// Ignore different colored stones
