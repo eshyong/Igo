@@ -47,6 +47,15 @@ type Game struct {
 	playing   bool
 }
 
+type Point struct {
+	row int
+	col int
+}
+
+func newPoint(row int, col int) *Point {
+	return &Point{row: row, col: col}
+}
+
 func NewGame(n int) *Game {
 	// Check for standard game sizes.
 	if n != SMALL && n != MEDIUM && n != LARGE {
@@ -139,27 +148,24 @@ func (game *Game) placeStone(row int, col int, color Color) {
 
 func (game *Game) CheckSurroundingStones(row int, col int, color Color) {
 	// Check if enemy groups are dead.
-	if row > 0 && game.board[row-1][col] != color {
-		game.RemoveIfDead(row-1, col)
-	}
-	if row < game.size-1 && game.board[row+1][col] != color {
-		game.RemoveIfDead(row+1, col)
-	}
-	if col > 0 && game.board[row][col-1] != color {
-		game.RemoveIfDead(row, col-1)
-	}
-	if col < game.size-1 && game.board[row][col+1] != color {
-		game.RemoveIfDead(row, col+1)
-	}
+	game.RemoveIfDead(row-1, col, color)
+	game.RemoveIfDead(row+1, col, color)
+	game.RemoveIfDead(row, col-1, color)
+	game.RemoveIfDead(row, col+1, color)
 }
 
-func (game *Game) RemoveIfDead(row int, col int) {
-	if row < 0 || row >= game.size || col < 0 || col >= game.size {
+func (game *Game) RemoveIfDead(row int, col int, color Color) {
+	if row < 0 || row >= game.size || col < 0 || col >= game.size || game.board[row][col] == color {
 		return
 	}
-	color := game.board[row][col]
-	if game.IsDead(row, col, color, START) {
-		game.removeRecursively(row, col, color)
+	var other Color
+	if color == BLACK {
+		other = WHITE
+	} else {
+		other = BLACK
+	}
+	if game.IsDead(row, col, other, START) {
+		game.removeRecursively(row, col, other)
 	}
 }
 
@@ -176,43 +182,61 @@ func (game *Game) removeRecursively(row int, col int, color Color) {
 }
 
 func (game *Game) IsDead(row int, col int, color Color, from Direction) bool {
-	// Found a border, return true
-	if row < 0 || row >= game.size || col < 0 || col >= game.size {
-		return true
+	// Stack iteration instead of recursion
+	// Create a map to keep track of added rows
+	stack := make([]*Point, 0, game.size*game.size)
+	visited := make(map[string]bool)
+
+	curr := newPoint(row, col)
+	hash := stringHash(row, col)
+	visited[hash] = true
+	stack = append(stack, curr)
+	for len(stack) > 0 {
+		// Pop point off stack
+		curr = stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		currRow, currCol := curr.row, curr.col
+		hash = stringHash(currRow, currCol)
+		visited[hash] = true
+
+		if game.board[currRow][currCol] == NONE {
+			// Found a liberty!
+			return false
+		} else if game.board[currRow][currCol] == color {
+			// Check left, right, top, and bottom.
+			// We don't want to add points that we already traversed.
+			if currRow > 0 {
+				hash = stringHash(currRow-1, currCol)
+				if !visited[hash] {
+					stack = append(stack, newPoint(currRow-1, currCol))
+				}
+			}
+			if currRow < game.size-1 {
+				hash = stringHash(currRow+1, currCol)
+				if !visited[hash] {
+					stack = append(stack, newPoint(currRow+1, currCol))
+				}
+			}
+			if currCol > 0 {
+				hash = stringHash(currRow, currCol-1)
+				if !visited[hash] {
+					stack = append(stack, newPoint(currRow, currCol-1))
+				}
+			}
+			if currCol < game.size-1 {
+				hash = stringHash(currRow, currCol+1)
+				if !visited[hash] {
+					stack = append(stack, newPoint(currRow, currCol+1))
+				}
+			}
+		}
+		// Ignore different colored stones
 	}
-	if game.board[row][col] == NONE {
-		// We found a liberty!
-		return false
-	} else if game.board[row][col] != color {
-		return true
-	}
-	// Check what direction the recursive call came from.
-	switch from {
-	case START:
-		// Check all 4 directions.
-		return game.IsDead(row+1, col, color, NORTH) && game.IsDead(row, col+1, color, WEST) &&
-			game.IsDead(row-1, col, color, SOUTH) && game.IsDead(row, col-1, color, EAST)
-	case NORTH:
-		// Check the south, east and west.
-		return game.IsDead(row+1, col, color, from) && game.IsDead(row, col+1, color, WEST) &&
-			game.IsDead(row, col-1, color, EAST)
-	case EAST:
-		// Check the west, north, and south.
-		return game.IsDead(row, col-1, color, from) && game.IsDead(row-1, col, color, SOUTH) &&
-			game.IsDead(row+1, col, color, NORTH)
-	case SOUTH:
-		// Check the north, west, and east.
-		return game.IsDead(row-1, col, color, from) && game.IsDead(row, col-1, color, EAST) &&
-			game.IsDead(row, col+1, color, WEST)
-	case WEST:
-		// Check the north, east, and south.
-		return game.IsDead(row, col+1, color, from) && game.IsDead(row-1, col, color, SOUTH) &&
-			game.IsDead(row+1, col, color, NORTH)
-	default:
-		// This never happens.
-		fmt.Println("heyo")
-		return false
-	}
+	return true
+}
+
+func stringHash(row int, col int) string {
+	return strconv.FormatInt(int64(row), 10) + ", " + strconv.FormatInt(int64(col), 10)
 }
 
 func PrintColor(color Color) {
